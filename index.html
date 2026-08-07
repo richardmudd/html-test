@@ -218,6 +218,123 @@ document.getElementById('goBtn').addEventListener('click', async () => {
 
 </body>
 </html>
+    // Fallback: generic containers, for other pages/sites
+    const containerSelectors = ['.reading-content', '.entry-content', '.comic-images', '#chapter-images', 'article'];
+    let scope = null;
+    for (const sel of containerSelectors) {
+      const el = doc.querySelector(sel);
+      if (el && el.querySelectorAll('img').length > 0) { scope = el; break; }
+    }
+    const imgs = Array.from((scope || doc).querySelectorAll('img'));
+    urls = imgs
+      .map(img => img.getAttribute('data-src') || img.getAttribute('data-lazy-src') || img.getAttribute('src'))
+      .filter(Boolean)
+      .map(src => resolveUrl(pageUrl, src));
+  }
+
+  urls = urls
+    .filter(Boolean)
+    .filter(u => !/gravatar\.com|avatar|logo|icon/i.test(u));
+
+  return { title, artist, urls: [...new Set(urls)] };
+}
+
+function slugFromUrl(pageUrl) {
+  try {
+    const u = new URL(pageUrl);
+    const parts = u.pathname.split('/').filter(Boolean);
+    return (parts[parts.length - 1] || u.hostname).slice(0, 80);
+  } catch (e) {
+    return 'comic';
+  }
+}
+
+// Runs `worker` over `items` with at most `limit` running concurrently.
+async function runPool(items, limit, worker) {
+  const results = new Array(items.length);
+  let next = 0;
+  async function runner() {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await worker(items[i], i);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, runner));
+  return results;
+}
+
+document.getElementById('goBtn').addEventListener('click', async () => {
+  const raw = document.getElementById('pageUrls').value.trim();
+  if (!raw) { alert('Enter at least one URL.'); return; }
+  const pageUrls = [...new Set(raw.split('\n').map(s => s.trim()).filter(Boolean))];
+
+  logEl.textContent = '';
+  progressEl.style.display = 'block';
+  progressEl.value = 0;
+
+  const zip = new JSZip();
+  let totalImages = 0;
+  let totalFailed = 0;
+  let comicsDone = 0;
+
+  const COMIC_CONCURRENCY = 6;   // comic pages fetched in parallel
+  const IMAGE_CONCURRENCY = 8;   // images fetched in parallel, per comic
+
+  await runPool(pageUrls, COMIC_CONCURRENCY, async (pageUrl) => {
+    const folder = slugFromUrl(pageUrl);
+
+    let title, artist, urls;
+    try {
+      ({ title, artist, urls } = await extractImageUrls(pageUrl));
+    } catch (err) {
+      log(`FAILED PAGE  ${pageUrl} — ${err.message}`);
+      comicsDone++;
+      progressEl.value = comicsDone / pageUrls.length;
+      return;
+    }
+
+    if (urls.length === 0) {
+      log(`  No images found for "${title}".`);
+      comicsDone++;
+      progressEl.value = comicsDone / pageUrls.length;
+      return;
+    }
+
+    zip.file(`${folder}/title.txt`, title);
+    if (artist) zip.file(`${folder}/artist.txt`, artist);
+
+    let failedHere = 0;
+    await runPool(urls, IMAGE_CONCURRENCY, async (url, i) => {
+      try {
+        const resp = await fetch(PROXY + encodeURIComponent(url));
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const blob = await resp.blob();
+        const fname = filenameFromUrl(url, i + 1);
+        zip.file(`${folder}/${fname}`, blob);
+        totalImages++;
+      } catch (err) {
+        failedHere++;
+        totalFailed++;
+      }
+    });
+
+    log(`"${title}"${artist ? ' by ' + artist : ''} — ${urls.length - failedHere}/${urls.length} image(s)${failedHere ? ' (' + failedHere + ' failed)' : ''}`);
+    comicsDone++;
+    progressEl.value = comicsDone / pageUrls.length;
+  });
+
+  log(`\nZipping ${totalImages} image(s) from ${pageUrls.length} comic(s)${totalFailed ? ` (${totalFailed} failed)` : ''}...`);
+  const content = await zip.generateAsync({ type: 'blob' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(content);
+  a.download = 'comics.zip';
+  a.click();
+  log('Done. Download should start automatically.');
+});
+</script>
+
+</body>
+</html>
       if (el && el.querySelectorAll('img').length > 0) { scope = el; break; }
     }
     const imgs = Array.from((scope || doc).querySelectorAll('img'));
