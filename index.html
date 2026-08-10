@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Combined Downloader Suite</title>
+    
+    <!-- Shared JSZip Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <style>
+        /* =========================================
+           GLOBAL & NAVIGATION STYLES
+           ========================================= */
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            transition: background 0.3s ease;
+            background: #152f56; /* Default to e621 background */
+        }
+        
+        #nav-bar {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .nav-btn {
+            background: #333;
+            color: #ccc;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .nav-btn:hover {
+            background: #555;
+            color: #fff;
+        }
+
+        .nav-btn.active {
+            background: #e4a73f;
+            color: #111;
+        }
+
+        .app-section {
+            display: none;
+            min-height: calc(100vh - 60px);
+        }
+
+        .app-section.active {
+            display: flex; /* or block, overridden below */
+        }
+
+        /* =========================================
+           APP 1: e621 DOWNLOADER STYLES
+           ========================================= */
+        #app-e621 {
+            display: none;
+            flex-direction: column;
+            color: #ffffff;
+            max-width: 700px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        #app-e621.active { display: block; }
+        
+        #app-e621 * { box-sizing: border-box; }
+        #app-e621 h1 { text-align: center; font-size: 1.5rem; margin: 0 0 20px; color: #e4e6ea; }
+        #app-e621 .card { background: #0b2039; border: 1px solid #2b4970; border-radius: 10px; padding: 18px; margin-bottom: 15px; }
+        #app-e621 .input-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px; }
+        #app-e621 label { font-size: 0.85rem; color: #a0b0c0; font-weight: bold; margin-top: 5px; }
+        #app-e621 input { width: 100%; padding: 12px; border: 1px solid #2b4970; border-radius: 5px; background: #091a2f; color: #ffffff; font-size: 15px; }
+        #app-e621 input:focus { outline: none; border-color: #e4a73f; }
+        #app-e621 input::placeholder { color: #71839a; }
+        #app-e621 .credential-buttons { display: flex; gap: 8px; margin-top: 2px; }
+        #app-e621 .credential-buttons button { flex: 1; padding: 9px; background: #2b4970; color: #e4e6ea; font-size: 12px; border: 0; border-radius: 5px; cursor: pointer; }
+        #app-e621 .credential-buttons button:hover:not(:disabled) { background: #385b87; }
+        #app-e621 #clearCredentialsBtn { background: #47343a; }
+        #app-e621 #clearCredentialsBtn:hover:not(:disabled) { background: #62454d; }
+        #app-e621 .button-group { display: flex; gap: 10px; margin-top: 15px; }
+        #app-e621 button.main-btn { flex: 1; padding: 12px; border: 0; border-radius: 5px; font-size: 15px; font-weight: bold; cursor: pointer; }
+        #app-e621 button:disabled { background: #444444 !important; color: #888888 !important; cursor: not-allowed; }
+        #app-e621 #e621-downloadBtn { background: #e4a73f; color: #152f56; }
+        #app-e621 #e621-downloadBtn:hover:not(:disabled) { background: #f0b95a; }
+        #app-e621 #diagnosticBtn { background: #2b4970; color: #e4e6ea; }
+        #app-e621 #diagnosticBtn:hover:not(:disabled) { background: #385b87; }
+        #app-e621 #e621-status { padding: 12px; border-radius: 5px; margin-bottom: 15px; display: none; white-space: pre-wrap; word-break: break-word; }
+        #app-e621 #e621-status.info { display: block; background: rgba(228, 167, 63, 0.15); border: 1px solid #e4a73f; color: #e4a73f; }
+        #app-e621 #e621-status.success { display: block; background: rgba(81, 207, 102, 0.12); border: 1px solid #51cf66; color: #51cf66; }
+        #app-e621 #e621-status.error { display: block; background: rgba(255, 107, 107, 0.12); border: 1px solid #ff6b6b; color: #ff6b6b; }
+        #app-e621 #preview { text-align: center; margin-bottom: 15px; }
+        #app-e621 #preview img, #app-e621 #preview video { max-width: 100%; max-height: 500px; border-radius: 6px; }
+        #app-e621 #diagnostics { background: #091a2f; border: 1px solid #2b4970; border-radius: 6px; padding: 12px; }
+        #app-e621 #diagnostics h2 { color: #e4a73f; font-size: 1rem; margin: 0 0 10px; }
+        #app-e621 #diagLog { background: #040d18; color: #00ff66; font-family: monospace; font-size: 12px; padding: 10px; border-radius: 4px; max-height: 350px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; line-height: 1.5; }
+        #app-e621 .note { color: #9eafc1; font-size: 12px; line-height: 1.5; margin-top: 12px; }
+        #app-e621 .security-note { margin-top: 10px; color: #8498ad; font-size: 11px; line-height: 1.5; }
+
+        @media (max-width: 500px) {
+            #app-e621 .button-group, #app-e621 .credential-buttons { flex-direction: column; }
+        }
+
+        /* =========================================
+           APP 2: HD COMICS DOWNLOADER STYLES
+           ========================================= */
+        #app-hd {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            color: #fff;
+        }
+        #app-hd.active { display: flex; }
+        
+        #app-hd * { box-sizing: border-box; }
+        #app-hd .container { width: 100%; max-width: 700px; text-align: center; margin-top: 10vh; }
+        #app-hd .logo { color: #ff1616; font-size: 42px; font-weight: 900; letter-spacing: -2px; text-shadow: 0 0 10px rgba(255, 0, 0, .5), 0 0 30px rgba(255, 0, 0, .25); margin-bottom: 8px; }
+        #app-hd .subtitle { color: #888; font-size: 14px; margin-bottom: 35px; }
+        #app-hd .box { background: #0d0d0d; border: 1px solid #3a1010; border-radius: 14px; padding: 28px; box-shadow: 0 20px 60px rgba(0, 0, 0, .7), 0 0 40px rgba(255, 0, 0, .05); }
+        #app-hd label { display: block; text-align: left; color: #bbb; font-size: 12px; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 9px; }
+        #app-hd .input-row { display: flex; gap: 10px; }
+        #app-hd input { flex: 1; min-width: 0; background: #050505; color: #fff; border: 1px solid #383838; border-radius: 8px; padding: 15px; font-size: 14px; outline: none; transition: .2s; }
+        #app-hd input::placeholder { color: #555; }
+        #app-hd input:focus { border-color: #e00000; box-shadow: 0 0 0 2px rgba(255, 0, 0, .1); }
+        #app-hd button { border: 0; border-radius: 8px; padding: 0 26px; background: #e00000; color: #fff; font-size: 14px; font-weight: 900; letter-spacing: .5px; cursor: pointer; transition: .2s; }
+        #app-hd button:hover { background: #ff1717; box-shadow: 0 0 20px rgba(255, 0, 0, .3); }
+        #app-hd button:active { transform: scale(.97); }
+        #app-hd button:disabled { opacity: .6; cursor: wait; }
+        #app-hd .status { min-height: 20px; margin-top: 18px; font-size: 13px; color: #777; }
+        #app-hd .status.error { color: #ff4444; }
+        #app-hd .status.loading { color: #ff3030; }
+        #app-hd .footer { margin-top: 20px; color: #444; font-size: 11px; }
+
+        @media (max-width: 600px) {
+            #app-hd .logo { font-size: 34px; }
+            #app-hd .box { padding: 20px; }
+            #app-hd .input-row { flex-direction: column; }
+            #app-hd input { width: 100%; }
+            #app-hd button { width: 100%; height: 50px; }
+        }
+
+        /* =========================================
+           APP 3: RULE34 ARCHIVER STYLES
+           ========================================= */
+        #app-r34 {
+            display: none;
+            padding: 24px;
+            color: #eee;
+            max-width: 1100px;
+            margin: auto;
+        }
+        #app-r34.active { display: block; }
+
+        #app-r34 * { box-sizing: border-box; }
+        #app-r34 h1 { margin-top: 0; }
+        #app-r34 .panel { background: #1c1c1c; border: 1px solid #333; border-radius: 10px; padding: 18px; margin-bottom: 20px; }
+        #app-r34 label { display: block; margin-bottom: 6px; font-weight: bold; }
+        #app-r34 input, #app-r34 textarea, #app-r34 button { font: inherit; }
+        #app-r34 input, #app-r34 textarea { width: 100%; background: #101010; color: #fff; border: 1px solid #444; border-radius: 6px; padding: 10px; }
+        #app-r34 textarea { min-height: 150px; resize: vertical; }
+        #app-r34 .field { margin-bottom: 14px; }
+        #app-r34 button { border: 0; border-radius: 6px; padding: 10px 15px; cursor: pointer; color: white; background: #5865f2; margin-right: 8px; margin-bottom: 8px; }
+        #app-r34 button:hover { filter: brightness(1.15); }
+        #app-r34 button.secondary { background: #444; }
+        #app-r34 button.danger { background: #b33; }
+        #app-r34 #r34-status { margin-top: 12px; white-space: pre-wrap; }
+        #app-r34 .success { color: #6ee7a0; }
+        #app-r34 .error { color: #ff7777; }
+        #app-r34 .post { background: #1c1c1c; border: 1px solid #333; border-radius: 10px; padding: 14px; margin-bottom: 20px; }
+        #app-r34 .post img { display: block; max-width: 100%; max-height: 900px; margin: 10px auto; border-radius: 6px; object-fit: contain; }
+        #app-r34 .post-info { color: #aaa; font-size: 14px; margin-bottom: 10px; word-break: break-all; }
+        #app-r34 .loading { opacity: 0.7; }
+        #app-r34 .hidden { display: none; }
+        #app-r34 .credentials-status { color: #aaa; font-size: 14px; margin-top: 8px; }
+    </style>
+</head>
+<body>
+
+    <!-- NAVIGATION BAR -->
+    <div id="nav-bar">
+        <button class="nav-btn active" onclick="switchApp('e621', '#152f56', this, '#e4a73f')">e621 Downloader</button>
+        <button class="nav-btn" onclick="switchApp('hd', 'radial-gradient(circle at top, #350000 0%, #120000 40%, #050505 80%)', this, '#e00000')">HD Comics</button>
+        <button class="nav-btn" onclick="switchApp('r34', '#111', this, '#5865f2')">Rule34 Archiver</button>
+    </div>
+
+    <!-- APP 1: e621 DOWNLOADER -->
+    <div id="app-e621" class="app-section active">
+        <h1>e621 ZIP Downloader</h1>
+        <div class="card">
+            <div class="input-group">
+                <label for="e621User">e621 Username</label>
+                <input type="text" id="e621User" value="richardmudd" placeholder="Your e621 username" autocomplete="username">
+                <label for="e621Key">e621 API Key</label>
+                <input type="password" id="e621Key" placeholder="Enter your e621 API key" autocomplete="current-password">
+                
+                <div class="credential-buttons">
+                    <button type="button" id="saveCredentialsBtn">Save Credentials</button>
+                    <button type="button" id="clearCredentialsBtn">Clear Saved Credentials</button>
+                </div>
+
+                <label for="postUrl">e621 Post URL</label>
+                <input type="text" id="postUrl" placeholder="https://e621.net/posts/6598745" autocomplete="off">
+            </div>
+
+            <div class="button-group">
+                <button id="e621-downloadBtn" class="main-btn">Download ZIP</button>
+                <button id="diagnosticBtn" class="main-btn">Run Diagnostics</button>
+            </div>
+
+            <div class="note">
+                Your username and API key can be saved locally in this browser. Once saved, you only need to enter the post URL.
+            </div>
+            <div class="security-note">
+                Saved credentials remain in this browser's local storage. Clearing browser site data will remove them.
+            </div>
+        </div>
+
+        <div id="e621-status"></div>
+        <div id="preview"></div>
+
+        <div id="diagnostics">
+            <h2>Diagnostic Console</h2>
+            <div id="diagLog">Ready.</div>
+        </div>
+    </div>
+
+    <!-- APP 2: HD COMICS DOWNLOADER -->
+    <div id="app-hd" class="app-section">
+        <div class="container">
+            <div class="logo">HD COMICS</div>
+            <div class="subtitle">Comic Downloader</div>
+            
+            <div class="box">
+                <form id="hd-downloadForm">
+                    <label for="hd-comicUrl">Comic URL</label>
+                    <div class="input-row">
+                        <input id="hd-comicUrl" type="text" placeholder="https://hdporncomics.com/..." autocomplete="off" required>
+                        <button id="hd-fetchButton" type="submit">FETCH</button>
+                    </div>
+                </form>
+                <div id="hd-status" class="status"></div>
+            </div>
+            
+            <div class="footer">HD Comics Downloader</div>
+        </div>
+    </div>
+
+    <!-- APP 3: RULE34 ARCHIVER -->
+    <div id="app-r34" class="app-section">
+        <h1>Rule34 API Image Archiver</h1>
+        
+        <div class="panel">
+            <h2>API Credentials</h2>
+            <div class="field">
+                <label for="r34-userId">User ID</label>
+                <input id="r34-userId" type="text" autocomplete="off" placeholder="Enter your Rule34 user ID">
+            </div>
+            <div class="field">
+                <label for="r34-apiKey">API Key</label>
+                <input id="r34-apiKey" type="password" autocomplete="off" placeholder="Enter your Rule34 API key">
+            </div>
+            <button id="r34-saveCredentials">Save Credentials</button>
+            <button id="r34-clearCredentials" class="danger">Clear Saved Credentials</button>
+            <div id="r34-credentialsStatus" class="credentials-status"></div>
+        </div>
+
+        <div class="panel">
+            <h2>Post URLs</h2>
+            <p>Paste one Rule34 post URL per line.</p>
+            <textarea id="r34-urlInput" placeholder="https://rule34.xxx/index.php?page=post&s=view&id=123456&#10;https://rule34.xxx/index.php?page=post&s=view&id=123457"></textarea>
+            <br><br>
+            <button id="r34-fetchButton">Fetch Images</button>
+            <button id="r34-clearResults" class="secondary">Clear Results</button>
+            <div id="r34-status"></div>
+        </div>
+
+        <div id="r34-results"></div>
+    </div>
+
+    <!-- LOGIC SCRIPTS -->
+    <script>
+        // Tab Navigation Logic
+        function switchApp(appId, bgColor, btn, activeColor) {
+            // Hide all apps and remove active class from buttons
+            document.querySelectorAll('.app-section').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.nav-btn').forEach(el => {
+                el.classList.remove('active');
+                el.style.backgroundColor = '';
+                el.style.color = '';
+            });
+
+            // Show selected app and activate button
+            document.getElementById('app-' + appId).classList.add('active');
+            btn.classList.add('active');
+            btn.style.backgroundColor = activeColor;
+            btn.style.color = (appId === 'e621') ? '#111' : '#fff';
+
+            // Change body background theme to match tool
+            document.body.style.background = bgColor;
+        }
+
+        /* ==================================================
+           APP 1: e621 DOWNLOADER LOGIC 
+           ================================================== */
+        (() => {
+            "use strict";
+            const PROXY_URL = "/api/proxy";
+            const SAVED_USERNAME_KEY = "e621_downloader_username";
+            const SAVED_API_KEY = "e621_downloader_api_key";
+
+            const userInput = document.getElementById("e621User");
+            const keyInput = document.getElementById("e621Key");
+            const postInput = document.getElementById("postUrl");
+            const downloadBtn = document.getElementById("e621-downloadBtn");
+            const diagnosticBtn = document.getElementById("diagnosticBtn");
+            const saveCredentialsBtn = document.getElementById("saveCredentialsBtn");
+            const clearCredentialsBtn = document.getElementById("clearCredentialsBtn");
+            const statusBox = document.getElementById("e621-status");
+            const preview = document.getElementById("preview");
+            const diagLog = document.getElementById("diagLog");
+
+            function setStatus(message, type = "info") {
+                statusBox.textContent = message;
+                statusBox.className = type;
+            }
+            function clearStatus() {
+                statusBox.textContent = "";
+                statusBox.className = "";
+            }
+            function log(message) {
+                const time = new Date().toLocaleTimeString();
+                if (diagLog.textContent.trim() === "Ready.") diagLog.textContent = "";
+                diagLog.textContent += `[${time}] ${message}\n`;
+                diagLog.scrollTop = diagLog.scrollHeight;
+            }
+            function saveCredentials() {
+                const username = userInput.value.trim();
+                const apiKey = keyInput.value.trim();
+                if (!username || !apiKey) {
+                    setStatus("Enter both your e621 username and API key before saving.", "error");
+                    return;
+                }
+                localStorage.setItem(SAVED_USERNAME_KEY, username);
+                localStorage.setItem(SAVED_API_KEY, apiKey);
+                setStatus("Credentials saved on this device.", "success");
+            }
+            function loadSavedCredentials() {
+                const savedUsername = localStorage.getItem(SAVED_USERNAME_KEY);
+                const savedApiKey = localStorage.getItem(SAVED_API_KEY);
+                if (savedUsername) userInput.value = savedUsername;
+                if (savedApiKey) keyInput.value = savedApiKey;
+            }
+            function clearSavedCredentials() {
+                localStorage.removeItem(SAVED_USERNAME_KEY);
+                localStorage.removeItem(SAVED_API_KEY);
+                userInput.value = "";
+                keyInput.value = "";
+                setStatus("Saved credentials have been cleared.", "success");
+            }
+            function getCredentials() {
+                const username = userInput.value.trim();
+                const apiKey = keyInput.value.trim();
+                if (!username) throw new Error("e621 username is required.");
+                if (!apiKey) throw new Error("e621 API key is required.");
+                return { username, apiKey };
+            }
+            function getPostId() {
+                const value = postInput.value.trim();
+                const match = value.match(/(?:https?:\/\/)?(?:www\.)?e621\.net\/posts\/(\d+)/i);
+                if (!match) throw new Error("Invalid e621 URL. Use https://e621.net/posts/123456");
+                return match[1];
+            }
+            async function proxyRequest(targetUrl, username = "", apiKey = "") {
+                const response = await fetch(PROXY_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ url: targetUrl, username: username, apiKey: apiKey })
+                });
+                const contentType = response.headers.get("content-type") || "";
+                if (!response.ok) {
+                    let message;
+                    if (contentType.includes("application/json")) {
+                        const data = await response.json();
+                        message = data.error || data.message || JSON.stringify(data);
+                    } else {
+                        message = await response.text();
+                    }
+                    throw new Error(`Proxy returned HTTP ${response.status}: ${message}`);
+                }
+                return response;
+            }
+            async function fetchPost(postId, username, apiKey) {
+                const targetUrl = `https://e621.net/posts/${postId}.json`;
+                const response = await proxyRequest(targetUrl, username, apiKey);
+                const data = await response.json();
+                if (!data || !data.post) throw new Error("e621 returned an unexpected response.");
+                return data.post;
+            }
+            async function fetchMedia(fileUrl) {
+                const response = await proxyRequest(fileUrl);
+                return await response.blob();
+            }
+            function showPreview(blob, extension) {
+                preview.innerHTML = "";
+                const objectUrl = URL.createObjectURL(blob);
+                const videoExtensions = ["webm", "mp4", "mov"];
+                if (videoExtensions.includes(extension.toLowerCase())) {
+                    const video = document.createElement("video");
+                    video.controls = true; video.loop = true; video.autoplay = true; video.muted = true; video.src = objectUrl;
+                    preview.appendChild(video);
+                } else {
+                    const image = document.createElement("img");
+                    image.src = objectUrl; image.alt = "e621 post preview";
+                    preview.appendChild(image);
+                }
+            }
+            async function runDiagnostics() {
+                diagnosticBtn.disabled = true; downloadBtn.disabled = true;
+                diagLog.textContent = "Starting diagnostic tests...\n";
+                try {
+                    log("1. Testing browser → Vercel connection...");
+                    const response = await fetch(PROXY_URL);
+                    log(`   HTTP status: ${response.status}`);
+                    const text = await response.text();
+                    log(`   Response: ${text}`);
+                    if (response.status === 400 && text.includes("Missing 'url' parameter")) {
+                        log("   SUCCESS: Browser can reach Vercel!");
+                    } else {
+                        throw new Error("Unexpected response from /api/proxy.");
+                    }
+                    log("2. Testing Vercel → e621 connection...");
+                    const testUrl = "https://e621.net/posts/6598745.json";
+                    const e621ProxyUrl = `${PROXY_URL}?url=${encodeURIComponent(testUrl)}`;
+                    const e621Response = await fetch(e621ProxyUrl);
+                    log(`   e621 proxy HTTP status: ${e621Response.status}`);
+                    const e621Text = await e621Response.text();
+                    if (!e621Response.ok) {
+                        log(`   e621 response: ${e621Text.slice(0, 500)}`);
+                        throw new Error(`e621 returned HTTP ${e621Response.status}`);
+                    }
+                    let data;
+                    try { data = JSON.parse(e621Text); } catch { throw new Error("Vercel returned a response from e621, but it was not valid JSON."); }
+                    if (!data || !data.post) throw new Error("e621 response did not contain post data.");
+                    log("   SUCCESS: Vercel can reach e621!");
+                    log(`   Post ID: ${data.post.id}`);
+                    if (data.post.file && data.post.file.url) log(`   File: ${data.post.file.url}`);
+
+                    const username = userInput.value.trim();
+                    const apiKey = keyInput.value.trim();
+                    if (username && apiKey) {
+                        log("3. Testing authenticated e621 request...");
+                        const postId = postInput.value.trim() ? getPostId() : "6598745";
+                        const authenticatedPost = await fetchPost(postId, username, apiKey);
+                        log(`   SUCCESS: Authentication accepted for post #${authenticatedPost.id}.`);
+                        if (authenticatedPost.file && authenticatedPost.file.url) {
+                            log("4. Testing media download through Vercel...");
+                            const media = await fetchMedia(authenticatedPost.file.url);
+                            log(`   SUCCESS: Media downloaded (${(media.size / 1024).toFixed(1)} KB).`);
+                        }
+                    }
+                    setStatus("Diagnostics completed successfully.", "success");
+                } catch (error) {
+                    console.error("Diagnostic error:", error);
+                    log(`ERROR: ${error.message}`);
+                    setStatus(error.message, "error");
+                } finally {
+                    diagnosticBtn.disabled = false; downloadBtn.disabled = false;
+                }
+            }
+            async function downloadZip() {
+                downloadBtn.disabled = true; diagnosticBtn.disabled = true;
+                clearStatus(); preview.innerHTML = "";
+                try {
+                    const { username, apiKey } = getCredentials();
+                    const postId = getPostId();
+                    setStatus(`Fetching e621 post #${postId}...`, "info");
+                    const post = await fetchPost(postId, username, apiKey);
+                    if (!post.file || !post.file.url) throw new Error("No downloadable file was found. The post may have been deleted.");
+                    const fileUrl = post.file.url;
+                    const extension = post.file.ext || "bin";
+                    setStatus(`Downloading media (${(post.file.size / 1024 / 1024).toFixed(2)} MB)...`, "info");
+                    const mediaBlob = await fetchMedia(fileUrl);
+                    showPreview(mediaBlob, extension);
+                    setStatus("Building ZIP file...", "info");
+                    const zip = new JSZip();
+                    const folder = zip.folder(postId);
+                    folder.file(`${postId}.${extension}`, mediaBlob);
+                    let artists = "unknown_artist";
+                    if (post.tags && Array.isArray(post.tags.artist) && post.tags.artist.length) artists = post.tags.artist.join("\n");
+                    folder.file("artist.txt", artists);
+                    let allTags = "";
+                    if (post.tags) {
+                        for (const [category, tags] of Object.entries(post.tags)) {
+                            if (Array.isArray(tags) && tags.length) {
+                                allTags += `--- ${category.toUpperCase()} ---\n`;
+                                allTags += `${tags.join("\n")}\n\n`;
+                            }
+                        }
+                    }
+                    folder.file("tags.txt", allTags.trim());
+                    const metadata = `Post ID: ${postId}\nRating: ${post.rating || "unknown"}\nScore: ${post.score?.total ?? "unknown"}\nDimensions: ${post.file.width || "?"} x ${post.file.height || "?"}\nFile Extension: ${extension}\nFile Size: ${post.file.size || 0} bytes\n\nSources:\n${Array.isArray(post.sources) && post.sources.length ? post.sources.join("\n") : "None"}\n\nDescription:\n${post.description || "No description provided."}\n`;
+                    folder.file("metadata.txt", metadata);
+                    const zipBlob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } });
+                    const zipUrl = URL.createObjectURL(zipBlob);
+                    const link = document.createElement("a");
+                    link.href = zipUrl; link.download = `${postId}.zip`;
+                    document.body.appendChild(link);
+                    link.click(); link.remove();
+                    setTimeout(() => { URL.revokeObjectURL(zipUrl); }, 1000);
+                    setStatus(`Success! ${postId}.zip was downloaded.`, "success");
+                } catch (error) {
+                    console.error("Download error:", error);
+                    setStatus(error.message, "error");
+                } finally {
+                    downloadBtn.disabled = false; diagnosticBtn.disabled = false;
+                }
+            }
+            downloadBtn.addEventListener("click", downloadZip);
+            diagnosticBtn.addEventListener("click", runDiagnostics);
+            saveCredentialsBtn.addEventListener("click", saveCredentials);
+            clearCredentialsBtn.addEventListener("click", clearSavedCredentials);
+            loadSavedCredentials();
+        })();
+
+        /* ==================================================
+           APP 2: HD COMICS DOWNLOADER LOGIC
+           ================================================== */
+        (() => {
+            const form = document.getElementById("hd-downloadForm");
+            const input = document.getElementById("hd-comicUrl");
+            const button = document.getElementById("hd-fetchButton");
+            const status = document.getElementById("hd-status");
+
+            form.addEventListener("submit", function(event) {
+                event.preventDefault();
+                const comicUrl = input.value.trim();
+                if (!comicUrl) {
+                    status.textContent = "Enter a comic URL first.";
+                    status.className = "status error";
+                    return;
+                }
+                let parsedUrl;
+                try {
+                    parsedUrl = new URL(comicUrl);
+                } catch (error) {
+                    status.textContent = "Please enter a valid URL.";
+                    status.className = "status error";
+                    return;
+                }
+                const API_URL = "https://hd-downloader-ruddy.vercel.app/download";
+                const downloadUrl = API_URL + "?url=" + encodeURIComponent(parsedUrl.href);
+                console.log("Comic URL:", parsedUrl.href);
+                console.log("Download URL:", downloadUrl);
+                status.textContent = "Fetching comic...";
+                status.className = "status loading";
+                button.disabled = true;
+                button.textContent = "FETCHING...";
+                window.location.assign(downloadUrl);
+            });
+        })();
+
+        /* ==================================================
+           APP 3: RULE34 ARCHIVER LOGIC
+           ================================================== */
+        (() => {
+            "use strict";
+            const API_URL = "https://api.rule34.xxx/index.php?page=dapi&s=post&q=index";
+            const userIdInput = document.getElementById("r34-userId");
+            const apiKeyInput = document.getElementById("r34-apiKey");
+            const saveCredentialsButton = document.getElementById("r34-saveCredentials");
+            const clearCredentialsButton = document.getElementById("r34-clearCredentials");
+            const fetchButton = document.getElementById("r34-fetchButton");
+            const clearResultsButton = document.getElementById("r34-clearResults");
+            const urlInput = document.getElementById("r34-urlInput");
+            const results = document.getElementById("r34-results");
+            const status = document.getElementById("r34-status");
+            const credentialsStatus = document.getElementById("r34-credentialsStatus");
+
+            const STORAGE_USER_ID = "rule34_archiver_user_id";
+            const STORAGE_API_KEY = "rule34_archiver_api_key";
+
+            function loadCredentials() {
+                const savedUserId = localStorage.getItem(STORAGE_USER_ID);
+                const savedApiKey = localStorage.getItem(STORAGE_API_KEY);
+                if (savedUserId) userIdInput.value = savedUserId;
+                if (savedApiKey) apiKeyInput.value = savedApiKey;
+                if (savedUserId && savedApiKey) {
+                    credentialsStatus.textContent = "Credentials loaded from this browser.";
+                } else {
+                    credentialsStatus.textContent = "No saved credentials.";
+                }
+            }
+            function saveCredentials() {
+                const userId = userIdInput.value.trim();
+                const apiKey = apiKeyInput.value.trim();
+                if (!userId || !apiKey) {
+                    credentialsStatus.textContent = "Enter both your User ID and API Key.";
+                    credentialsStatus.style.color = "#ff7777";
+                    return;
+                }
+                localStorage.setItem(STORAGE_USER_ID, userId);
+                localStorage.setItem(STORAGE_API_KEY, apiKey);
+                credentialsStatus.textContent = "Credentials saved locally in this browser.";
+                credentialsStatus.style.color = "#6ee7a0";
+            }
+            function clearCredentials() {
+                localStorage.removeItem(STORAGE_USER_ID);
+                localStorage.removeItem(STORAGE_API_KEY);
+                userIdInput.value = "";
+                apiKeyInput.value = "";
+                credentialsStatus.textContent = "Saved credentials cleared.";
+                credentialsStatus.style.color = "#aaa";
+            }
+            function extractPostId(input) {
+                input = input.trim();
+                if (!input) return null;
+                try {
+                    const url = new URL(input);
+                    const id = url.searchParams.get("id");
+                    if (id && /^\d+$/.test(id)) return id;
+                } catch (error) {}
+                const match = input.match(/[?&]id=(\d+)/i);
+                if (match) return match[1];
+                if (/^\d+$/.test(input)) return input;
+                return null;
+            }
+            async function fetchPost(postId, userId, apiKey) {
+                const params = new URLSearchParams({ page: "dapi", s: "post", q: "index", json: "1", id: postId, user_id: userId, api_key: apiKey });
+                const requestUrl = API_URL + "&" + params.toString();
+                const response = await fetch(requestUrl);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+                if (data && data.success === false) throw new Error(data.message || "API search failed.");
+                return data;
+            }
+            function createPostElement(post, originalUrl) {
+                const postElement = document.createElement("div");
+                postElement.className = "post";
+                const postInfo = document.createElement("div");
+                postInfo.className = "post-info";
+                const id = post.id ?? "Unknown";
+                const fileUrl = post.file_url ?? "";
+                postInfo.innerHTML = `<strong>Post ID:</strong> ${escapeHtml(String(id))}<br><strong>Source:</strong> ${escapeHtml(originalUrl)}<br><strong>File:</strong> ${escapeHtml(fileUrl)}`;
+                postElement.appendChild(postInfo);
+                if (!fileUrl) {
+                    const error = document.createElement("div");
+                    error.className = "error"; error.textContent = "The API did not return a file URL.";
+                    postElement.appendChild(error);
+                    return postElement;
+                }
+                const image = document.createElement("img");
+                image.loading = "lazy"; image.src = fileUrl; image.alt = `Rule34 post ${id}`;
+                image.onerror = () => {
+                    image.style.display = "none";
+                    const error = document.createElement("div");
+                    error.className = "error"; error.textContent = "The image could not be displayed by the browser.";
+                    postElement.appendChild(error);
+                };
+                postElement.appendChild(image);
+                const controls = document.createElement("div");
+                const openButton = document.createElement("button");
+                openButton.textContent = "Open Image";
+                openButton.onclick = () => { window.open(fileUrl, "_blank", "noopener,noreferrer"); };
+                controls.appendChild(openButton);
+                const downloadButton = document.createElement("button");
+                downloadButton.textContent = "Download ZIP";
+                downloadButton.onclick = () => { downloadPostZip(post); };
+                controls.appendChild(downloadButton);
+                postElement.appendChild(controls);
+                return postElement;
+            }
+            async function downloadPostZip(post) {
+                const postId = String(post.id ?? "").trim();
+                const fileUrl = String(post.file_url ?? "").trim();
+                if (!postId || !fileUrl) { status.className = "error"; status.textContent = "This post is missing its ID or file URL."; return; }
+                if (typeof JSZip === "undefined") { status.className = "error"; status.textContent = "JSZip failed to load. Check your internet connection and try again."; return; }
+                try {
+                    status.className = "loading"; status.textContent = `Downloading image for post ${postId}...`;
+                    let response; let directError;
+                    try {
+                        response = await fetch(fileUrl, { mode: "cors", credentials: "omit" });
+                        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    } catch (error) {
+                        directError = error;
+                        status.textContent = `Direct image download blocked for ${postId}; trying CORS relay...`;
+                        const proxyUrl = "https://api.allorigins.win/raw?url=" + encodeURIComponent(fileUrl);
+                        try {
+                            response = await fetch(proxyUrl, { mode: "cors", credentials: "omit" });
+                            if (!response.ok) throw new Error(`CORS relay HTTP ${response.status}`);
+                        } catch (proxyError) {
+                            throw new Error(`The image server blocked browser access. Direct request: ${directError?.message || "failed"}. CORS relay: ${proxyError.message}`);
+                        }
+                    }
+                    const blob = await response.blob();
+                    if (!blob.size) throw new Error("The image response was empty.");
+                    const extension = getExtensionFromUrl(fileUrl, blob.type);
+                    const zip = new JSZip();
+                    const folder = zip.folder(postId);
+                    folder.file(`${postId}${extension}`, blob);
+                    const tags = getPostTags(post);
+                    folder.file("tags.txt", tags.length ? tags.join("\n") : "");
+                    status.textContent = `Creating ZIP for post ${postId}...`;
+                    const zipBlob = await zip.generateAsync({ type: "blob", compression: "STORE" });
+                    const objectUrl = URL.createObjectURL(zipBlob);
+                    const anchor = document.createElement("a");
+                    anchor.href = objectUrl; anchor.download = `${postId}.zip`;
+                    document.body.appendChild(anchor); anchor.click(); anchor.remove();
+                    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+                    status.className = "success"; status.textContent = `Downloaded ${postId}.zip with the image and tags.txt.`;
+                } catch (error) {
+                    status.className = "error"; status.textContent = `Could not create the ZIP for ${postId}.\n\n${error.message}`;
+                }
+            }
+            function getPostTags(post) {
+                let rawTags = "";
+                if (typeof post.tags === "string") rawTags = post.tags;
+                else if (Array.isArray(post.tags)) rawTags = post.tags.join(" ");
+                return rawTags.trim().split(/\s+/).filter(Boolean);
+            }
+            function getExtensionFromUrl(url, mimeType) {
+                const pathname = new URL(url).pathname;
+                const match = pathname.match(/\.([a-zA-Z0-9]+)$/);
+                if (match) return "." + match[1].toLowerCase();
+                const mimeMap = { "image/jpeg": ".jpg", "image/png": ".png", "image/gif": ".gif", "image/webp": ".webp", "image/bmp": ".bmp" };
+                return mimeMap[mimeType] || ".jpg";
+            }
+            async function fetchImages() {
+                const userId = userIdInput.value.trim();
+                const apiKey = apiKeyInput.value.trim();
+                if (!userId || !apiKey) { status.className = "error"; status.textContent = "Enter your User ID and API Key first."; return; }
+                localStorage.setItem(STORAGE_USER_ID, userId);
+                localStorage.setItem(STORAGE_API_KEY, apiKey);
+                const lines = urlInput.value.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+                if (!lines.length) { status.className = "error"; status.textContent = "Paste at least one Rule34 post URL."; return; }
+                results.innerHTML = "";
+                status.className = "loading"; status.textContent = `Processing ${lines.length} URL(s)...`;
+                let successful = 0; let failed = 0;
+                for (let i = 0; i < lines.length; i++) {
+                    const originalUrl = lines[i];
+                    const postId = extractPostId(originalUrl);
+                    if (!postId) { failed++; addError(originalUrl, "Could not determine a Rule34 post ID."); continue; }
+                    status.textContent = `Fetching ${i + 1}/${lines.length} — Post ${postId}`;
+                    try {
+                        const data = await fetchPost(postId, userId, apiKey);
+                        let post = null;
+                        if (Array.isArray(data)) post = data[0];
+                        else if (data && data.post) post = Array.isArray(data.post) ? data.post[0] : data.post;
+                        if (!post) throw new Error("No post was returned by the API.");
+                        const element = createPostElement(post, originalUrl);
+                        results.appendChild(element);
+                        successful++;
+                    } catch (error) {
+                        failed++; addError(originalUrl, error.message);
+                    }
+                }
+                status.className = successful > 0 ? "success" : "error";
+                status.textContent = `Finished.\n\nSuccessful: ${successful}\nFailed: ${failed}`;
+            }
+            function addError(url, message) {
+                const element = document.createElement("div");
+                element.className = "post";
+                element.innerHTML = `<strong class="error">FAILED</strong><br><br><strong>URL:</strong> ${escapeHtml(url)}<br><strong>Error:</strong> ${escapeHtml(message)}`;
+                results.appendChild(element);
+            }
+            function escapeHtml(value) {
+                return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+            }
+            saveCredentialsButton.addEventListener("click", saveCredentials);
+            clearCredentialsButton.addEventListener("click", clearCredentials);
+            fetchButton.addEventListener("click", fetchImages);
+            clearResultsButton.addEventListener("click", () => { results.innerHTML = ""; status.textContent = ""; });
+            loadCredentials();
+        })();
+    </script>
+</body>
+</html>
